@@ -160,6 +160,35 @@ export class AppSyncConstruct extends Construct {
       runtime: appsync.FunctionRuntime.JS_1_0_0,
     });
 
+    this.api.createResolver("GetAllArticles", {
+      typeName: "Query",
+      fieldName: "getAllArticles",
+      dataSource: dbDataSource,
+      code: appsync.Code.fromAsset("./resolvers/articles/getAllArticles.js"),
+      runtime: appsync.FunctionRuntime.JS_1_0_0,
+    });
+    this.api.createResolver("GetArticle", {
+      typeName: "Query",
+      fieldName: "getArticle",
+      dataSource: dbDataSource,
+      code: appsync.Code.fromAsset("./resolvers/articles/getArticle.js"),
+      runtime: appsync.FunctionRuntime.JS_1_0_0,
+    });
+
+    this.api.createResolver("GetAllDrafts", {
+      typeName: "Query",
+      fieldName: "getAllDrafts",
+      dataSource: dbDataSource,
+      code: appsync.Code.fromAsset("./resolvers/drafts/getAllDrafts.js"),
+      runtime: appsync.FunctionRuntime.JS_1_0_0,
+    });
+    this.api.createResolver("GetDraft", {
+      typeName: "Query",
+      fieldName: "getDraft",
+      dataSource: dbDataSource,
+      code: appsync.Code.fromAsset("./resolvers/drafts/getDraft.js"),
+      runtime: appsync.FunctionRuntime.JS_1_0_0,
+    });
     // Apply common tags
     [this.api].forEach((resource) => {
       Object.entries(COMMON_TAGS).forEach(([key, value]) => {

@@ -41,7 +41,6 @@ export class AiWriterStack extends cdk.Stack {
       },
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    /*
     // Add global secondary index for getting all users
     ai_writer_db.addGlobalSecondaryIndex({
       indexName: "getAllDrafts",
@@ -55,7 +54,6 @@ export class AiWriterStack extends cdk.Stack {
       },
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    */
 
     // Create an S3 bucket for storing generated videos and thumbnails
     const mediaBucket = new s3.Bucket(this, "S3MediaBucket", {

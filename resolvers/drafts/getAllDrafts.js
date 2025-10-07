@@ -5,8 +5,8 @@ export function request(ctx) {
 
   const index = "getAllDrafts";
   const query = {
-    GSI1PK: { eq: `USER#${userId}` },
-    GSI1SK: { beginsWith: "DRAFT#" },
+    GSI2PK: { eq: `USER#${userId}` },
+    GSI2SK: { beginsWith: "DRAFT#" },
   };
   return ddb.query({
     query,
