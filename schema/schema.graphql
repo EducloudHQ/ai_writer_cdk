@@ -1,0 +1,116 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  getUserAccount(id: String!): User! @aws_cognito_user_pools
+  getUserByEmail(email: String!): User @aws_cognito_user_pools
+  getAllArticles(
+    userId: String!
+    nextToken: String
+    limit: Int!
+  ): ArticleResult! @aws_cognito_user_pools
+  getArticle(id: String!): Article! @aws_cognito_user_pools
+  getAllDrafts(userId: String!, nextToken: String, limit: Int!): DraftResult!
+    @aws_cognito_user_pools
+  getDraft(id: String!): Draft! @aws_cognito_user_pools
+}
+
+type Mutation {
+  createUserAccount(userInput: CreateUserInput!): User! @aws_cognito_user_pools
+  updateUserAccount(userInput: UpdateUserInput!): User! @aws_cognito_user_pools
+}
+
+input CreateUserInput @aws_cognito_user_pools {
+  username: String!
+  firstName: String!
+  lastName: String!
+  about: String!
+  email: AWSEmail!
+  userType: USERTYPE!
+  profilePicKey: String!
+  profilePicUrl: String!
+}
+
+input UpdateUserInput @aws_cognito_user_pools {
+  id: String!
+  username: String!
+  profilePicKey: String!
+  profilePicUrl: String!
+  address: AddressInput!
+}
+
+type User @aws_cognito_user_pools {
+  id: String!
+  username: String!
+  firstName: String!
+  lastName: String!
+  userType: USERTYPE!
+  about: String!
+  email: AWSEmail!
+  profilePicUrl: String!
+  profilePicKey: String!
+  createdOn: AWSTimestamp
+  updatedOn: AWSTimestamp
+}
+
+type Article @aws_cognito_user_pools {
+  articleId: String!
+  createdAt: AWSDateTime!
+  entityType: ENTITYTYPE
+  keywords: [String!]
+  outline: String!
+  status: String!
+  title: String!
+  updatedAt: AWSDateTime!
+}
+
+type BrandVoice @aws_cognito_user_pools {
+  audience: String!
+  style_rules: [String!]!
+  tone: String!
+}
+type Brief @aws_cognito_user_pools {
+  brand_voice: BrandVoice!
+  key_points: [String!]!
+  snippets: [String]
+  sources: [String!]!
+}
+type Draft @aws_cognito_user_pools {
+  brief: Brief!
+  draftId: String!
+  entityType: ENTITYTYPE
+  markdown: String!
+  outline: String
+  slug: String!
+  status: String!
+  title: String!
+  updatedAt: AWSDateTime!
+  createdAt: AWSDateTime!
+}
+
+input AddressInput @aws_cognito_user_pools {
+  street: String!
+  city: String!
+  zip: Int!
+  country: String!
+}
+
+type ArticleResult @aws_cognito_user_pools {
+  items: [Article!]!
+  nextToken: String
+}
+type DraftResult @aws_cognito_user_pools {
+  items: [Draft!]!
+  nextToken: String
+}
+
+enum USERTYPE {
+  ADMIN
+  MEMBER
+}
+enum ENTITYTYPE {
+  ARTICLE
+  DRAFT
+}
