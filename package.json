@@ -32,6 +32,7 @@
     "@aws-cdk/aws-lambda-python-alpha": "^2.214.1-alpha.0",
     "date-fns": "4.1.0",
     "@aws-appsync/utils": "2.0.3",
+    "cdk-s3-vectors": "0.2.2",
     "@cdklabs/generative-ai-cdk-constructs": "0.1.309",
     "aws-cdk-lib": "2.215.0",
     "constructs": "^10.0.0"

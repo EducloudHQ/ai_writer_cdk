@@ -5,6 +5,9 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as path from "path";
+import * as kms from "aws-cdk-lib/aws-kms";
+import * as bedrock from "aws-cdk-lib/aws-bedrock";
+import * as s3Vectors from "cdk-s3-vectors";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import { AppSyncConstructProps } from "../types";
 import {
@@ -14,6 +17,7 @@ import {
   DEFAULT_API_KEY_EXPIRATION_DAYS,
   BEDROCK_MODELS,
 } from "../constants";
+import { VectorKnowledgeBase } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 
 /**
  * Construct for AppSync API and related resources
@@ -35,6 +39,69 @@ export class AppSyncConstruct extends Construct {
       currentDate.getTime() +
         DEFAULT_API_KEY_EXPIRATION_DAYS * 24 * 60 * 60 * 1000
     );
+
+    // Create KMS key for encryption (optional)
+    const encryptionKey = new kms.Key(this, "VectorBucketKey", {
+      description: "KMS key for S3 vector bucket encryption",
+      enableKeyRotation: true,
+    });
+
+    // Create a vector bucket with all options
+    const vectorBucket = new s3Vectors.Bucket(this, "AiWriterVectorBucket", {
+      vectorBucketName: "ai-writer-vector-bucket",
+      encryptionConfiguration: {
+        sseType: "aws:kms", // 'AES256' | 'aws:kms'
+        kmsKey: encryptionKey, // Required when sseType is 'aws:kms'
+      },
+    });
+    // Create a vector index with all options
+    const vectorIndex = new s3Vectors.Index(this, "AiWriterVectorIndex", {
+      vectorBucketName: vectorBucket.vectorBucketName, // REQUIRED
+      indexName: "ai-writer-vector-index", // REQUIRED
+      dataType: "float32", // REQUIRED (only 'float32' supported)
+      dimension: 1024, // REQUIRED (1-4096)
+      distanceMetric: "cosine", // REQUIRED ('euclidean' | 'cosine')
+      // Optional metadata configuration
+      metadataConfiguration: {
+        nonFilterableMetadataKeys: ["source", "timestamp", "category"],
+      },
+    });
+    // REQUIRED - add dependency for vector index
+    vectorIndex.node.addDependency(vectorBucket);
+
+    // Create a knowledge base with all options
+    const knowledgeBase = new s3Vectors.KnowledgeBase(
+      this,
+      "AiWriterKnowledgeBase",
+      {
+        knowledgeBaseName: "ai-writer-knowledge-base", // REQUIRED
+        vectorBucketArn: vectorBucket.vectorBucketArn, // REQUIRED
+        indexArn: vectorIndex.indexArn, // REQUIRED
+        // REQUIRED knowledge base configuration
+        knowledgeBaseConfiguration: {
+          embeddingModelArn:
+            "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0", // REQUIRED
+          embeddingDataType: "FLOAT32", // Optional: 'BINARY' | 'FLOAT32'
+          dimensions: "1024", // Optional: dimensions as string
+        },
+        // Optional fields
+        description:
+          "Knowledge base for vector similarity search using S3 Vectors",
+        clientToken: "unique-client-token-12345678901234567890123456789012345", // Must be >= 33 characters
+      }
+    );
+    // REQUIRED - add dependencies for knowledge base
+    knowledgeBase.node.addDependency(vectorIndex);
+    knowledgeBase.node.addDependency(vectorBucket);
+
+    // Create data source for knowledge base
+    const customDs = new bedrock.CfnDataSource(this, "custom-data-source", {
+      name: "custom-data-source",
+      knowledgeBaseId: knowledgeBase.knowledgeBaseId,
+      dataSourceConfiguration: {
+        type: "CUSTOM",
+      },
+    });
 
     // Create a Cognito user pool with secure defaults
     const userPool = new cognito.UserPool(this, "UserPool", {
