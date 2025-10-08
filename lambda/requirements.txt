@@ -1,0 +1,7 @@
+boto3
+aws-lambda-powertools[tracer]
+pre-commit==4.1.0
+ruff==0.9.1
+svix-ksuid
+requests
+

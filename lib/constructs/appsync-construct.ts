@@ -17,7 +17,6 @@ import {
   DEFAULT_API_KEY_EXPIRATION_DAYS,
   BEDROCK_MODELS,
 } from "../constants";
-import { VectorKnowledgeBase } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 
 /**
  * Construct for AppSync API and related resources
@@ -27,6 +26,7 @@ export class AppSyncConstruct extends Construct {
    * The AppSync GraphQL API
    */
   public readonly api: appsync.GraphqlApi;
+  public readonly knowledgeBase: s3Vectors.KnowledgeBase;
 
   constructor(scope: Construct, id: string, props: AppSyncConstructProps) {
     super(scope, id);
@@ -70,7 +70,7 @@ export class AppSyncConstruct extends Construct {
     vectorIndex.node.addDependency(vectorBucket);
 
     // Create a knowledge base with all options
-    const knowledgeBase = new s3Vectors.KnowledgeBase(
+    this.knowledgeBase = new s3Vectors.KnowledgeBase(
       this,
       "AiWriterKnowledgeBase",
       {
@@ -91,13 +91,13 @@ export class AppSyncConstruct extends Construct {
       }
     );
     // REQUIRED - add dependencies for knowledge base
-    knowledgeBase.node.addDependency(vectorIndex);
-    knowledgeBase.node.addDependency(vectorBucket);
+    this.knowledgeBase.node.addDependency(vectorIndex);
+    this.knowledgeBase.node.addDependency(vectorBucket);
 
     // Create data source for knowledge base
     const customDs = new bedrock.CfnDataSource(this, "custom-data-source", {
       name: "custom-data-source",
-      knowledgeBaseId: knowledgeBase.knowledgeBaseId,
+      knowledgeBaseId: this.knowledgeBase.knowledgeBaseId,
       dataSourceConfiguration: {
         type: "CUSTOM",
       },

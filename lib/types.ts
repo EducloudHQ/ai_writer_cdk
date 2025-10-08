@@ -35,31 +35,6 @@ export interface DatabaseConstructProps {
 }
 
 /**
- * Properties for the KnowledgeBaseConstruct
- */
-export interface KnowledgeBaseConstructProps {
-  /**
-   * The name of the knowledge base
-   */
-  knowledgeBaseName: string;
-
-  /**
-   * The name of the S3 bucket for knowledge base data
-   */
-  bucketName: string;
-
-  /**
-   * The connection string for Pinecone
-   */
-  pineconeConnectionString: string;
-
-  /**
-   * The ARN of the secret containing Pinecone credentials
-   */
-  pineconeCredentialsSecretArn: string;
-}
-
-/**
  * Properties for the WorkflowConstruct
  */
 export interface WorkflowConstructProps {

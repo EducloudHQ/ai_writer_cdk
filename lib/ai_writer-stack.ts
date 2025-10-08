@@ -3,6 +3,10 @@ import { Construct } from "constructs";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { AppSyncConstruct } from "./constructs/appsync-construct";
+import { COMMON_LAMBDA_ENV_VARS } from "./constants";
+import * as s3n from "aws-cdk-lib/aws-s3-notifications";
+import { KnowledgeBaseBase } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
+import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha/lib/function";
 
 export class AiWriterStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -76,6 +80,39 @@ export class AiWriterStack extends cdk.Stack {
     const appSyncConstruct = new AppSyncConstruct(this, "AppSyncConstruct", {
       aiWriterTable: ai_writer_db,
     });
+
+    const docProcessingFunction = new PythonFunction(
+      this,
+      "docProcessingFunction",
+      {
+        entry: "./lambda/",
+        handler: "lambda_handler",
+
+        runtime: cdk.aws_lambda.Runtime.PYTHON_3_13,
+        memorySize: 256,
+        timeout: cdk.Duration.minutes(10),
+        logRetention: cdk.aws_logs.RetentionDays.ONE_WEEK,
+        tracing: cdk.aws_lambda.Tracing.ACTIVE,
+        environment: {
+          ...COMMON_LAMBDA_ENV_VARS,
+          KNOWLEDGE_BASE_ID: appSyncConstruct.knowledgeBase.knowledgeBaseId,
+          MEDIA_BUCKET: mediaBucket.bucketName,
+        },
+      }
+    );
+
+    // Configure the S3 bucket to trigger the Lambda function when files are uploaded to the uploads/ path
+    mediaBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(docProcessingFunction),
+      {
+        prefix: "uploads/",
+      }
+
+      // This will trigger for all uploads, we'll filter by path in the Lambda function
+    );
+
+    mediaBucket.grantReadWrite(docProcessingFunction);
 
     new cdk.CfnOutput(this, "GraphQLAPIKey", {
       value: appSyncConstruct.api.apiKey || "",
