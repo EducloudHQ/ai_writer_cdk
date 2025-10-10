@@ -34,6 +34,7 @@
     "@aws-appsync/utils": "2.0.3",
     "cdk-s3-vectors": "0.2.2",
     "@cdklabs/generative-ai-cdk-constructs": "0.1.309",
+    "@aws-lambda-powertools/jmespath": "2.27.0",
     "aws-cdk-lib": "2.215.0",
     "constructs": "^10.0.0"
   }

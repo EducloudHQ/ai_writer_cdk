@@ -4,10 +4,12 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { AppSyncConstruct } from "./constructs/appsync-construct";
+import * as logs from "aws-cdk-lib/aws-logs";
 import { COMMON_LAMBDA_ENV_VARS } from "./constants";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import { KnowledgeBaseBase } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha/lib/function";
+import { EventsConstruct } from "./constructs/events-construct";
 
 export class AiWriterStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -82,6 +84,21 @@ export class AiWriterStack extends cdk.Stack {
       aiWriterTable: ai_writer_db,
     });
 
+    // Create the events construct after AppSync is created
+    const eventsConstruct = new EventsConstruct(this, "EventsConstruct", {
+      aiWriterTable: ai_writer_db,
+
+      createScheduleFunction: appSyncConstruct.createScheduleFunction,
+    });
+
+    const docProcessingFunctionLogs = new logs.LogGroup(
+      this,
+      "docProcessingFunctionLogs",
+      {
+        retention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
+
     const docProcessingFunction = new PythonFunction(
       this,
       "docProcessingFunction",
@@ -92,7 +109,7 @@ export class AiWriterStack extends cdk.Stack {
         runtime: cdk.aws_lambda.Runtime.PYTHON_3_13,
         memorySize: 256,
         timeout: cdk.Duration.minutes(10),
-        logRetention: cdk.aws_logs.RetentionDays.ONE_WEEK,
+        logGroup: docProcessingFunctionLogs,
         tracing: cdk.aws_lambda.Tracing.ACTIVE,
         bundling: {
           assetExcludes: [

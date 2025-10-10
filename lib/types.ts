@@ -49,24 +49,14 @@ export interface WorkflowConstructProps {
  */
 export interface EventsConstructProps {
   /**
-   * The DynamoDB table for posts
+   * The DynamoDB table
    */
-  postsTable: dynamodb.Table;
-
-  /**
-   * The EventBridge event bus
-   */
-  eventBus: events.EventBus;
-
-  /**
-   * The AppSync GraphQL API
-   */
-  api: appsync.GraphqlApi;
+  aiWriterTable: dynamodb.Table;
 
   /**
    * The Lambda function for scheduling posts
    */
-  schedulePostsFunction: lambda.Function;
+  createScheduleFunction: lambda.Function;
 }
 
 /**

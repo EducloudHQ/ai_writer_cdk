@@ -4,7 +4,9 @@ import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as path from "path";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as kms from "aws-cdk-lib/aws-kms";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
 import * as s3Vectors from "cdk-s3-vectors";
@@ -28,6 +30,8 @@ export class AppSyncConstruct extends Construct {
   public readonly api: appsync.GraphqlApi;
   public readonly knowledgeBase: s3Vectors.KnowledgeBase;
   public readonly customDs: bedrock.CfnDataSource;
+  public readonly createScheduleFunction: NodejsFunction;
+  public readonly distributeContentFunction: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: AppSyncConstructProps) {
     super(scope, id);
@@ -149,6 +153,23 @@ export class AppSyncConstruct extends Construct {
       enableTokenRevocation: true,
     });
 
+    // Create the IAM role for scheduled tasks
+    const scheduledRole = new iam.Role(this, "ScheduledRole", {
+      assumedBy: new iam.ServicePrincipal("scheduler.amazonaws.com"),
+      description:
+        "Role assumed by EventBridge Scheduler for scheduled content",
+    });
+
+    // Create a schedule group for all user schedules
+    const contentScheduledGroup = new scheduler.ScheduleGroup(
+      this,
+      "ContentScheduledGroup",
+      {
+        scheduleGroupName: "ContentScheduledGroup",
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
     // Create the AppSync API
     this.api = new appsync.GraphqlApi(this, "ai-writer-api", {
       name: "AiWriterAPI",
@@ -183,6 +204,78 @@ export class AppSyncConstruct extends Construct {
     const dbDataSource = this.api.addDynamoDbDataSource(
       "aiWriterTableDataSource",
       aiWriterTable
+    );
+
+    // dedicated log group (avoid logRetention deprecation)
+    const distributeContentFunctionLogs = new logs.LogGroup(
+      this,
+      "distributeContentFunctionLogs",
+      {
+        retention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
+
+    // this function gets triggered by Eventbridge scheduler
+    const distributeContentFunction = new NodejsFunction(
+      this,
+      "SendPostsFunction",
+      {
+        entry: path.join(
+          __dirname,
+          "../lambda/ts/distributeContentFunction.ts"
+        ),
+
+        handler: "handler",
+        runtime: lambda.Runtime.NODEJS_20_X,
+        memorySize: DEFAULT_LAMBDA_MEMORY_SIZE,
+        logGroup: distributeContentFunctionLogs,
+        tracing: lambda.Tracing.ACTIVE,
+        environment: {
+          ...COMMON_LAMBDA_ENV_VARS,
+        },
+        bundling: {
+          minify: true,
+        },
+      }
+    );
+
+    // Grant permissions to invoke the send posts function
+    this.distributeContentFunction.grantInvoke(scheduledRole);
+
+    const createScheduleLogs = new logs.LogGroup(this, "CreateScheduleLogs", {
+      retention: logs.RetentionDays.ONE_WEEK,
+    });
+
+    // Create the schedule content function(this function gets triggered by eventbridge pipe)
+    this.createScheduleFunction = new NodejsFunction(
+      this,
+      "CreateScheduleFunction",
+      {
+        entry: path.join(__dirname, "../lambda/ts/createScheduleFunction.ts"),
+        handler: "handler",
+        runtime: lambda.Runtime.NODEJS_20_X,
+        memorySize: DEFAULT_LAMBDA_MEMORY_SIZE,
+        logGroup: createScheduleLogs,
+        tracing: lambda.Tracing.ACTIVE,
+        environment: {
+          ...COMMON_LAMBDA_ENV_VARS,
+          SCHEDULE_GROUP_NAME: contentScheduledGroup.scheduleGroupName,
+          SEND_POST_SERVICE_ARN: this.distributeContentFunction.functionArn,
+          SCHEDULE_ROLE_ARN: scheduledRole.roleArn,
+        },
+        bundling: {
+          minify: true,
+        },
+      }
+    );
+
+    // Grant permissions to create schedules
+    this.createScheduleFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["scheduler:CreateSchedule", "iam:PassRole"],
+        resources: ["*"],
+        effect: iam.Effect.ALLOW,
+      })
     );
 
     // Create pipeline resolvers for user account operations
