@@ -1,5 +1,3 @@
-import { logger, metrics, tracer } from "./utilities";
-
 import {
   EVENTBRIDGE,
   extractDataFromEnvelope,
@@ -12,6 +10,24 @@ import {
 } from "@aws-sdk/client-scheduler";
 import { addMinutes, addDays, addMonths } from "date-fns";
 import type { EventBridgeEvent } from "aws-lambda";
+import { Logger } from "@aws-lambda-powertools/logger";
+import { Metrics } from "@aws-lambda-powertools/metrics";
+import { Tracer } from "@aws-lambda-powertools/tracer";
+
+const logger = new Logger({
+  persistentKeys: {
+    aws_account_id: process.env.AWS_ACCOUNT_ID || "N/A",
+    aws_region: process.env.AWS_REGION || "N/A",
+  },
+});
+
+const metrics = new Metrics({
+  defaultDimensions: {
+    aws_account_id: process.env.AWS_ACCOUNT_ID || "N/A",
+    aws_region: process.env.AWS_REGION || "N/A",
+  },
+});
+const tracer = new Tracer();
 
 function buildAtExpression(
   schedule: {

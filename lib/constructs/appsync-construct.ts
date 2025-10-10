@@ -216,13 +216,13 @@ export class AppSyncConstruct extends Construct {
     );
 
     // this function gets triggered by Eventbridge scheduler
-    const distributeContentFunction = new NodejsFunction(
+    this.distributeContentFunction = new NodejsFunction(
       this,
       "SendPostsFunction",
       {
         entry: path.join(
           __dirname,
-          "../lambda/ts/distributeContentFunction.ts"
+          "../../lambda/ts/distributeContentFunction.ts"
         ),
 
         handler: "handler",
@@ -251,7 +251,10 @@ export class AppSyncConstruct extends Construct {
       this,
       "CreateScheduleFunction",
       {
-        entry: path.join(__dirname, "../lambda/ts/createScheduleFunction.ts"),
+        entry: path.join(
+          __dirname,
+          "../../lambda/ts/createScheduleFunction.ts"
+        ),
         handler: "handler",
         runtime: lambda.Runtime.NODEJS_20_X,
         memorySize: DEFAULT_LAMBDA_MEMORY_SIZE,

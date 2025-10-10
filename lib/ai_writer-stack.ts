@@ -7,7 +7,6 @@ import { AppSyncConstruct } from "./constructs/appsync-construct";
 import * as logs from "aws-cdk-lib/aws-logs";
 import { COMMON_LAMBDA_ENV_VARS } from "./constants";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
-import { KnowledgeBaseBase } from "@cdklabs/generative-ai-cdk-constructs/lib/cdk-lib/bedrock";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha/lib/function";
 import { EventsConstruct } from "./constructs/events-construct";
 

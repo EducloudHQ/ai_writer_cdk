@@ -5,7 +5,6 @@ import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as pipes from "aws-cdk-lib/aws-pipes";
-import * as appsync from "aws-cdk-lib/aws-appsync";
 import { EventsConstructProps } from "../types";
 import { COMMON_TAGS } from "../constants";
 
