@@ -1,18 +1,15 @@
-import {
-  EVENTBRIDGE,
-  extractDataFromEnvelope,
-} from "@aws-lambda-powertools/jmespath/envelopes";
+// createScheduleFunction.ts  (Pattern B — parse only `detail` with EventBridgeEnvelope)
+import middy from "@middy/core";
+import { parser } from "@aws-lambda-powertools/parser/middleware";
+import { EventBridgeEnvelope } from "@aws-lambda-powertools/parser/envelopes/eventbridge";
+import { Logger } from "@aws-lambda-powertools/logger";
 import {
   SchedulerClient,
   CreateScheduleCommand,
   FlexibleTimeWindowMode,
   ActionAfterCompletion,
 } from "@aws-sdk/client-scheduler";
-import { addMinutes, addDays, addMonths } from "date-fns";
-import type { EventBridgeEvent } from "aws-lambda";
-import { Logger } from "@aws-lambda-powertools/logger";
-import { Metrics } from "@aws-lambda-powertools/metrics";
-import { Tracer } from "@aws-lambda-powertools/tracer";
+import { z } from "zod";
 
 const logger = new Logger({
   persistentKeys: {
@@ -21,13 +18,35 @@ const logger = new Logger({
   },
 });
 
-const metrics = new Metrics({
-  defaultDimensions: {
-    aws_account_id: process.env.AWS_ACCOUNT_ID || "N/A",
-    aws_region: process.env.AWS_REGION || "N/A",
-  },
+const AttrS = z.object({ S: z.string() }).transform((v) => v.S);
+const AttrN = z.object({ N: z.string() }).transform((v) => Number(v.N));
+
+const ScheduleAttr = z
+  .object({
+    M: z.object({
+      year: AttrN,
+      month: AttrN,
+      day: AttrN,
+      hour: AttrN,
+      minute: AttrN,
+      second: AttrN,
+    }),
+  })
+  .transform(({ M }) => M);
+
+/** `detail` schema: your producer sends { scheduledContent: <AttributeValue map> } */
+const DetailSchema = z.object({
+  scheduledContent: z.object({
+    id: AttrS,
+    userId: AttrS,
+    draftId: AttrS.optional(),
+    articleId: AttrS.optional(),
+    entity: AttrS,
+    schedule: ScheduleAttr,
+  }),
 });
-const tracer = new Tracer();
+
+type ScheduledContent = z.infer<typeof DetailSchema>["scheduledContent"];
 
 function buildAtExpression(
   schedule: {
@@ -58,95 +77,64 @@ function buildAtExpression(
     );
   }
 
-  logger.info(`diffMinutes is ${diffMinutes}`);
+  const atIso = new Date(now.getTime() + diffMinutes * 60_000)
+    .toISOString()
+    .split(".")[0];
 
-  const iso = addMinutes(now, diffMinutes).toISOString().split(".")[0];
-  return `at(${iso})`;
+  return `at(${atIso})`;
 }
-type DynamoDBPost = {
-  id: { S: string };
-  draftId: { S: string };
-  articleId: { S: string };
-  createdOn?: { N: string };
-  entity: { S: string };
-  imageUrls?: { L: { S: string }[] };
-  updatedOn?: { NULL: true } | { N: string };
-  userId: { S: string };
-  schedule?: {
-    M: {
-      day: { N: string };
-      hour: { N: string };
-      minute: { N: string };
-      month: { N: string };
-      second: { N: string };
-      year: { N: string };
-    };
-  };
-};
 
-type ScheduledContentBody = {
-  content: DynamoDBPost;
-};
+const scheduler = new SchedulerClient({});
 
-const client = new SchedulerClient({});
-const createSchedule = ({ name, payload, description, time }: any) => {
-  return client.send(
+async function createSchedule(args: {
+  name: string;
+  description: string;
+  payload: unknown;
+  scheduleExpression: string;
+}) {
+  const { name, description, payload, scheduleExpression } = args;
+
+  return scheduler.send(
     new CreateScheduleCommand({
       Name: name,
       GroupName: process.env.SCHEDULE_GROUP_NAME,
       Target: {
         RoleArn: process.env.SCHEDULE_ROLE_ARN,
         Arn: process.env.SEND_POST_SERVICE_ARN,
-        Input: JSON.stringify({ ...payload }),
+        Input: JSON.stringify(payload),
       },
       ActionAfterCompletion: ActionAfterCompletion.DELETE,
-      FlexibleTimeWindow: {
-        Mode: FlexibleTimeWindowMode.OFF,
-      },
+      FlexibleTimeWindow: { Mode: FlexibleTimeWindowMode.OFF },
       Description: description,
-      ScheduleExpression: time,
+      ScheduleExpression: scheduleExpression,
     })
   );
-};
-export const handler = async (
-  event: EventBridgeEvent<"ScheduleContentCreated", ScheduledContentBody>
-) => {
-  logger.info("This is the schedule post function");
-  logger.info(`records ${JSON.stringify(event.detail.content)}`);
+}
 
-  const records = extractDataFromEnvelope<ScheduledContentBody>(
-    event,
-    EVENTBRIDGE
-  );
-  logger.info(`records are ${JSON.stringify(records)}`);
+async function baseHandler(event: z.infer<typeof DetailSchema>) {
+  logger.info("ScheduleContentCreated handler invoked (Pattern B)");
+  logger.info(`parsed detail: ${JSON.stringify(event)}`);
 
-  const id = records.content.id.S;
-  const userId = records.content.userId.S;
+  const post: ScheduledContent = event.scheduledContent;
 
-  const schedule = records.content.schedule?.M;
-  const day = schedule!.day.N;
-  const hour = schedule!.hour.N;
-  const minute = schedule!.minute.N;
-  const month = schedule!.month.N;
-  const second = schedule!.second.N;
-  const year = schedule!.year.N;
+  const scheduleExpression = buildAtExpression(post.schedule);
 
-  logger.info(`schedule is ${JSON.stringify(schedule)}`);
-  const scheduleExpression = buildAtExpression({
-    year: parseInt(year),
-    month: parseInt(month),
-    day: parseInt(day),
-    hour: parseInt(hour),
-    minute: parseInt(minute),
-    second: parseInt(second),
-  });
-
-  logger.info(`post id is ${JSON.stringify(records.content.id.S)}`);
-  // Schedule for welcome email 2 minutes after sign up
   await createSchedule({
-    name: `${id}-scheduled-post`,
-    description: `Post ${id} scheduled by ${userId}`,
-    payload: { ...event.detail, context: "24hr" },
-    time: scheduleExpression,
+    name: `${post.id}-scheduled-post`,
+    description: `Post ${post.id} scheduled by ${post.userId}`,
+    // Include exactly what your consumer expects; keeping it explicit is best:
+    payload: { scheduledContent: post, context: "24hr" },
+    scheduleExpression,
   });
-};
+
+  logger.info(`Schedule created for ${post.id} at ${scheduleExpression}`);
+  return { ok: true, id: post.id, scheduleExpression };
+}
+
+export const handler = middy(baseHandler).use(
+  parser({
+    schema: DetailSchema, // validate your detail shape
+    envelope: EventBridgeEnvelope, // parse only event.detail
+    // safeParse: true,             // enable if you want {success,data?,error?}
+  })
+);

@@ -20,6 +20,9 @@ type Query {
 type Mutation {
   createUserAccount(userInput: CreateUserInput!): User! @aws_cognito_user_pools
   updateUserAccount(userInput: UpdateUserInput!): User! @aws_cognito_user_pools
+  createScheduledContent(postInput: CreateContentScheduleInput!): Boolean!
+    @aws_api_key
+    @aws_cognito_user_pools
 }
 
 input CreateUserInput @aws_cognito_user_pools {
@@ -114,4 +117,21 @@ enum ENTITYTYPE {
   ARTICLE
   DRAFT
   SCHEDULED_CONTENT
+}
+input CreateContentScheduleInput @aws_cognito_user_pools {
+  entity: ENTITYTYPE!
+  userId: String!
+  id: String!
+  draftId: String!
+  articleId: String!
+  schedule: ScheduleInput
+}
+
+input ScheduleInput @aws_cognito_user_pools {
+  minute: Int!
+  second: Int!
+  hour: Int!
+  day: Int!
+  month: Int!
+  year: Int!
 }

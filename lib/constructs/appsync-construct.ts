@@ -239,7 +239,7 @@ export class AppSyncConstruct extends Construct {
       }
     );
 
-    // Grant permissions to invoke the send posts function
+    // Grant permissions to invoke the distribute content function
     this.distributeContentFunction.grantInvoke(scheduledRole);
 
     const createScheduleLogs = new logs.LogGroup(this, "CreateScheduleLogs", {
