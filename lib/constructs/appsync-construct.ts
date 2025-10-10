@@ -27,6 +27,7 @@ export class AppSyncConstruct extends Construct {
    */
   public readonly api: appsync.GraphqlApi;
   public readonly knowledgeBase: s3Vectors.KnowledgeBase;
+  public readonly customDs: bedrock.CfnDataSource;
 
   constructor(scope: Construct, id: string, props: AppSyncConstructProps) {
     super(scope, id);
@@ -95,7 +96,7 @@ export class AppSyncConstruct extends Construct {
     this.knowledgeBase.node.addDependency(vectorBucket);
 
     // Create data source for knowledge base
-    const customDs = new bedrock.CfnDataSource(this, "custom-data-source", {
+    this.customDs = new bedrock.CfnDataSource(this, "custom-data-source", {
       name: "custom-data-source",
       knowledgeBaseId: this.knowledgeBase.knowledgeBaseId,
       dataSourceConfiguration: {

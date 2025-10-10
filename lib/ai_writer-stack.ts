@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as iam from "aws-cdk-lib/aws-iam";
 import { AppSyncConstruct } from "./constructs/appsync-construct";
 import { COMMON_LAMBDA_ENV_VARS } from "./constants";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
@@ -87,16 +88,29 @@ export class AiWriterStack extends cdk.Stack {
       {
         entry: "./lambda/",
         handler: "lambda_handler",
-
+        index: "index.py",
         runtime: cdk.aws_lambda.Runtime.PYTHON_3_13,
         memorySize: 256,
         timeout: cdk.Duration.minutes(10),
         logRetention: cdk.aws_logs.RetentionDays.ONE_WEEK,
         tracing: cdk.aws_lambda.Tracing.ACTIVE,
+        bundling: {
+          assetExcludes: [
+            "**/.venv/**",
+            "**/__pycache__/**",
+            "**/*.pyc",
+            "**/.pytest_cache/**",
+            "**/.mypy_cache/**",
+            "**/.DS_Store",
+            "**/.git/**",
+            "**/node_modules/**",
+          ],
+        },
         environment: {
           ...COMMON_LAMBDA_ENV_VARS,
           KNOWLEDGE_BASE_ID: appSyncConstruct.knowledgeBase.knowledgeBaseId,
           MEDIA_BUCKET: mediaBucket.bucketName,
+          DATA_SOURCE_ID: appSyncConstruct.customDs.attrDataSourceId,
         },
       }
     );
@@ -108,11 +122,25 @@ export class AiWriterStack extends cdk.Stack {
       {
         prefix: "uploads/",
       }
-
-      // This will trigger for all uploads, we'll filter by path in the Lambda function
     );
 
     mediaBucket.grantReadWrite(docProcessingFunction);
+    const kbDataAccessRole = appSyncConstruct.knowledgeBase.role;
+    mediaBucket.grantRead(kbDataAccessRole);
+    appSyncConstruct.knowledgeBase.grantIngestion(docProcessingFunction);
+    docProcessingFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "bedrock:IngestKnowledgeBaseDocuments",
+          "bedrock:GetKnowledgeBaseDocuments",
+        ],
+        resources: [
+          `arn:aws:bedrock:${cdk.Stack.of(this).region}:${
+            cdk.Stack.of(this).account
+          }:knowledge-base/${appSyncConstruct.knowledgeBase.knowledgeBaseId}`,
+        ],
+      })
+    );
 
     new cdk.CfnOutput(this, "GraphQLAPIKey", {
       value: appSyncConstruct.api.apiKey || "",
